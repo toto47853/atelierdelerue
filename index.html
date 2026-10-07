@@ -148,21 +148,23 @@
   var PAINTINGS_ZIP_URL = 'paintings.zip';
 
   // ====================================================================
-  // CONFIGURATION A REMPLIR PAR TOI (voir les explications fournies)
+  // CONFIGURATION (aucune clé secrète dans ce fichier : le bin jsonbin est en lecture publique,
+  // et l'admin saisit sa clé à l'ouverture de ?adm)
   // ====================================================================
   var STORAGE_BIN_ID = '6aa14104ac6210605ab7a93b';
-  var STORAGE_API_KEY = '$2a$10$YJCrf6zPv6BS7jtcLDGA6uPQF/Ob1Yy7ByxrPr3A3b/uoxsMiq0xe';
-  var ADMIN_PASSWORD = 'Tokyo.84200.Ficelle.69480.Bleu.84260';
   var CONTACT_EMAIL = 'zonedel81@gmail.com';
   // ====================================================================
 
   var isAdminMode = window.location.pathname.includes('/adm') || window.location.search.includes('adm');
 
+  var ADMIN_KEY = null;
   if (isAdminMode) {
-    var enteredPassword = window.prompt('Mot de passe administrateur :');
-    if (enteredPassword !== ADMIN_PASSWORD) {
+    var enteredKey = window.prompt("Clé d'administration :");
+    if (enteredKey && enteredKey.trim()) {
+      ADMIN_KEY = enteredKey.trim();
+    } else {
       isAdminMode = false;
-      alert('Mot de passe incorrect : mode visiteur activé.');
+      alert('Mode visiteur activé.');
     }
   }
 
@@ -692,7 +694,7 @@
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'X-Master-Key': STORAGE_API_KEY
+        'X-Master-Key': ADMIN_KEY
       },
       body: JSON.stringify({ paintings: records })
     })
@@ -704,15 +706,13 @@
         alert("Succès ! Les positions des tableaux ont été enregistrées. Elles s'afficheront désormais pour tous les visiteurs.");
       })
       .catch(function (err) {
-        alert("Erreur lors de l'enregistrement en ligne (vérifie STORAGE_BIN_ID / STORAGE_API_KEY et ta connexion).");
+        alert("Erreur lors de l'enregistrement : clé d'administration incorrecte ou problème de connexion.");
         console.error(err);
       });
   }
 
   function loadRemotePaintings() {
-    return fetch('https://api.jsonbin.io/v3/b/' + STORAGE_BIN_ID + '/latest', {
-      headers: { 'X-Master-Key': STORAGE_API_KEY }
-    })
+    return fetch('https://api.jsonbin.io/v3/b/' + STORAGE_BIN_ID + '/latest')
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
