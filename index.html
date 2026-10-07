@@ -75,6 +75,8 @@
   #g3d-contact-cancel { background: rgba(255,255,255,0.15); color: #fff; }
   #g3d-contact-send { background: #4da3ff; color: #111; font-weight: bold; }
   #g3d-contact-error { color: #ff8686; font-size: 13px; margin: -4px 0 10px; display: none; }
+  #g3d-contact-status { font-size: 13px; margin: -4px 0 10px; display: none; }
+  #g3d-contact-send:disabled { opacity: 0.6; cursor: default; }
 
   /* ---- Croix de flèches tactile (mobile) ---- */
   #g3d-dpad {
@@ -129,6 +131,7 @@
     <input id="g3d-contact-email" placeholder="Votre email" type="email" />
     <textarea id="g3d-contact-message" placeholder="Votre message"></textarea>
     <div id="g3d-contact-error">Merci de remplir tous les champs (email valide).</div>
+    <div id="g3d-contact-status"></div>
     <div class="g3d-contact-actions">
       <button id="g3d-contact-cancel">Annuler</button>
       <button id="g3d-contact-send">Envoyer</button>
@@ -153,6 +156,10 @@
   // ====================================================================
   var STORAGE_BIN_ID = '6ac6a8dbffd5d16053572822';
   var CONTACT_EMAIL = 'zonedel81@gmail.com';
+  // EmailJS : à remplir avec les 3 valeurs de ton compte emailjs.com (elles sont faites pour être publiques)
+  var EMAILJS_SERVICE_ID = 'VOTRE_SERVICE_ID';
+  var EMAILJS_TEMPLATE_ID = 'VOTRE_TEMPLATE_ID';
+  var EMAILJS_PUBLIC_KEY = 'VOTRE_CLE_PUBLIQUE';
   // ====================================================================
 
   var isAdminMode = window.location.pathname.includes('/adm') || window.location.search.includes('adm');
@@ -790,6 +797,7 @@
   var contactCancel = document.getElementById('g3d-contact-cancel');
   var contactSend = document.getElementById('g3d-contact-send');
   var contactError = document.getElementById('g3d-contact-error');
+  var contactStatus = document.getElementById('g3d-contact-status');
   var contactName = document.getElementById('g3d-contact-name');
   var contactEmail = document.getElementById('g3d-contact-email');
   var contactMessage = document.getElementById('g3d-contact-message');
@@ -797,6 +805,7 @@
   function openContactModal() {
     if (controls.isLocked) controls.unlock();
     contactError.style.display = 'none';
+    contactStatus.style.display = 'none';
     contactModal.style.display = 'flex';
   }
   function closeContactModal() {
@@ -809,25 +818,81 @@
     if (e.target === contactModal) closeContactModal();
   });
 
+  function showContactStatus(text, ok) {
+    contactStatus.textContent = text;
+    contactStatus.style.color = ok ? '#7be495' : '#ff8686';
+    contactStatus.style.display = 'block';
+  }
+
+  function emailJsConfigured() {
+    return EMAILJS_SERVICE_ID.indexOf('VOTRE_') !== 0 &&
+           EMAILJS_TEMPLATE_ID.indexOf('VOTRE_') !== 0 &&
+           EMAILJS_PUBLIC_KEY.indexOf('VOTRE_') !== 0;
+  }
+
+  function sendWithMailto(name, email, message) {
+    var subject = encodeURIComponent('Message depuis la galerie virtuelle - ' + name);
+    var body = encodeURIComponent('Nom : ' + name + '\nEmail : ' + email + '\n\n' + message);
+    window.location.href = 'mailto:' + CONTACT_EMAIL + '?subject=' + subject + '&body=' + body;
+  }
+
   contactSend.addEventListener('click', function () {
     var name = contactName.value.trim();
     var email = contactEmail.value.trim();
     var message = contactMessage.value.trim();
     var emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
+    contactStatus.style.display = 'none';
     if (!name || !emailOk || !message) {
       contactError.style.display = 'block';
       return;
     }
+    contactError.style.display = 'none';
 
-    var subject = encodeURIComponent('Message depuis la galerie virtuelle - ' + name);
-    var body = encodeURIComponent('Nom : ' + name + '\nEmail : ' + email + '\n\n' + message);
-    window.location.href = 'mailto:' + CONTACT_EMAIL + '?subject=' + subject + '&body=' + body;
+    // Sans configuration EmailJS, on garde l'ancien envoi par le logiciel mail du visiteur
+    if (!emailJsConfigured()) {
+      sendWithMailto(name, email, message);
+      contactName.value = '';
+      contactEmail.value = '';
+      contactMessage.value = '';
+      closeContactModal();
+      return;
+    }
 
-    contactName.value = '';
-    contactEmail.value = '';
-    contactMessage.value = '';
-    closeContactModal();
+    contactSend.disabled = true;
+    contactSend.textContent = 'Envoi…';
+
+    fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        service_id: EMAILJS_SERVICE_ID,
+        template_id: EMAILJS_TEMPLATE_ID,
+        user_id: EMAILJS_PUBLIC_KEY,
+        template_params: {
+          from_name: name,
+          from_email: email,
+          reply_to: email,
+          message: message
+        }
+      })
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        contactName.value = '';
+        contactEmail.value = '';
+        contactMessage.value = '';
+        showContactStatus('Merci ! Ton message a bien été envoyé.', true);
+        setTimeout(closeContactModal, 2000);
+      })
+      .catch(function (err) {
+        console.error('EmailJS', err);
+        showContactStatus("L'envoi a échoué. Réessaie dans un instant.", false);
+      })
+      .then(function () {
+        contactSend.disabled = false;
+        contactSend.textContent = 'Envoyer';
+      });
   });
 })();
 </script>
