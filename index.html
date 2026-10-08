@@ -694,26 +694,36 @@
   // ------------------------------------------------------------------
   // STOCKAGE PARTAGÉ EN LIGNE (remplace localStorage)
   // ------------------------------------------------------------------
+  function putPaintings(headerName, records) {
+    var headers = { 'Content-Type': 'application/json' };
+    headers[headerName] = ADMIN_KEY;
+    return fetch('https://api.jsonbin.io/v3/b/' + STORAGE_BIN_ID, {
+      method: 'PUT',
+      headers: headers,
+      body: JSON.stringify({ paintings: records })
+    });
+  }
+
   function savePaintings() {
     if (!isAdminMode) return;
     var records = placedPaintings.map(function (p) { return p.record; });
-    fetch('https://api.jsonbin.io/v3/b/' + STORAGE_BIN_ID, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': ADMIN_KEY
-      },
-      body: JSON.stringify({ paintings: records })
-    })
+    // On essaie d'abord comme Master Key, puis comme Access Key (clé limitée à ce bin)
+    putPaintings('X-Master-Key', records)
+      .then(function (res) {
+        if (res.status === 401 || res.status === 403) return putPaintings('X-Access-Key', records);
+        return res;
+      })
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.json();
-      })
-      .then(function () {
         alert("Succès ! Les positions des tableaux ont été enregistrées. Elles s'afficheront désormais pour tous les visiteurs.");
       })
       .catch(function (err) {
-        alert("Erreur lors de l'enregistrement : clé d'administration incorrecte ou problème de connexion.");
+        var m = String(err && err.message || err);
+        var hint = /40[13]/.test(m) ? "La clé a été refusée : ce n'est pas celle du compte qui possède le bin (ou elle n'a pas le droit de modifier)."
+                 : /404/.test(m) ? "Bin introuvable : vérifie l'identifiant du bin."
+                 : /429/.test(m) ? "Trop de requêtes jsonbin, réessaie plus tard."
+                 : "Problème de connexion ou de blocage du navigateur.";
+        alert("Échec de l'enregistrement (" + m + ").\n" + hint);
         console.error(err);
       });
   }
